@@ -1,12 +1,13 @@
 --- Impeller Optimization Results ---
 Defined Parameters:
   Number of Blades: 6
+  Blade Thickness: 1.6 mm
   Inlet Diameter: 40.0 mm
   Outer Diameter: 120.0 mm
-  Inlet Height: 35.0 mm
+  Inlet Height: 32.6 mm
 Target Max RPM: 4000.0
-Calculated Target CFM: 24.46 CFM
-Optimal Inlet Angle (beta1): 21.36°
-Target Outlet Angle (beta2): 29.96°
-Effective Inlet Area: 3936.90 mm^2
+Calculated Target CFM: 20.56 CFM
+Optimal Inlet Angle (beta1): 23.42°
+Target Outlet Angle (beta2): 32.02°
+Effective Inlet Area: 3309.41 mm^2
 ---------------------------------------

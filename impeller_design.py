@@ -3,11 +3,12 @@ import math
 import sys
 
 # --- Configuration & Constants ---
+MATERIAL_THICKNESS = 2.4 # Base and shroud thickness
 R_INNER = 20.0       # Inner radius (mm)
 R_OUTER = 60.0       # Outer radius (mm)
-H_INLET = 35.0       # Inlet height (mm)
+H_INLET = 35.0 - MATERIAL_THICKNESS  # Inlet height (mm)
 NUM_BLADES = 6       # Total number of blades
-THICKNESS = 0.8      # Blade thickness (mm)
+THICKNESS = 1.6      # Blade thickness (mm)
 MAX_RPM = 4000.0     # Maximum operating speed (RPM)
 PHI = 0.35           # Optimal flow coefficient (industry standard)
 
@@ -74,6 +75,7 @@ def generate_impeller_design():
         f"--- Impeller Optimization Results ---\n"
         f"Defined Parameters:\n"
         f"  Number of Blades: {NUM_BLADES}\n"
+        f"  Blade Thickness: {THICKNESS} mm\n"
         f"  Inlet Diameter: {R_INNER * 2:.1f} mm\n"
         f"  Outer Diameter: {R_OUTER * 2:.1f} mm\n"
         f"  Inlet Height: {H_INLET:.1f} mm\n"
