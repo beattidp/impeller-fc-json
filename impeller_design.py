@@ -62,9 +62,8 @@ def generate_impeller_design():
     b1_rad = calculate_beta1(PHI, R_INNER, NUM_BLADES, THICKNESS)
     b1_deg = math.degrees(b1_rad)
     
-    # Target outlet angle: beta1 + 8.6 degrees (yielding ~30 degrees for beta1=21.4)
+    # Target outlet angle: beta1 + 8.6 degrees
     b2_deg = b1_deg + 8.6
-    # Ensure it's constrained between 20 and 35
     b2_deg = max(20.0, min(35.0, b2_deg))
     b2_rad = math.radians(b2_deg)
     
@@ -92,65 +91,128 @@ def generate_impeller_design():
     with open("impeller_spec.txt", "w") as spec_file:
         spec_file.write(spec_output)
     
-    # 3. Formulate the Modified Logarithmic Spiral for FreeCAD
-    # We map using t = ln(r / r1)
-    # r(t) = r1 * exp(t)
-    # theta(t) = cot(beta1) * t + (k/2) * t^2
-    # cot(beta) = cot(beta1) + k * t
-    
+    # 3. Formulate the Modified Logarithmic Spiral
     cot_b1 = 1.0 / math.tan(b1_rad)
     cot_b2 = 1.0 / math.tan(b2_rad)
     t_max = math.log(R_OUTER / R_INNER)
     k = (cot_b2 - cot_b1) / t_max
     
-    # Parameters for formula
     a_val = R_INNER
     b_val = cot_b1
     c_val = k / 2.0
-    
     blockage = THICKNESS * NUM_BLADES
     
-    # FreeCAD Formulas
-    # d1 = a*exp(t)                  (Radius r)
-    # d2 = b*t + c*t^2               (Angle theta)
-    # d3 = b + 2*c*t                 (cot(beta(r)))
-    # d4 = 1 / sqrt(1 + d3^2)        (sin(beta(r)))
-    # d5 = 2*pi*d1 - blockage/d4     (Effective circumference at r)
+    # Calculate bounds for trailing curve
+    def get_rtrail(t):
+        rt = a_val * math.exp(t)
+        cot_b = b_val + 2.0 * c_val * t
+        cos_b = cot_b / math.sqrt(1.0 + cot_b**2)
+        r2 = rt**2 + THICKNESS**2 - 2.0 * rt * THICKNESS * cos_b
+        return math.sqrt(max(0, r2))
+        
+    def solve_t(target_r, t_guess):
+        low, high = t_guess - 1.0, t_guess + 1.0
+        for _ in range(100):
+            mid = (low + high) / 2.0
+            f_low = get_rtrail(low) - target_r
+            f_mid = get_rtrail(mid) - target_r
+            if f_low * f_mid < 0:
+                high = mid
+            else:
+                low = mid
+        return (low + high) / 2.0
+
+    t_min_trail = solve_t(R_INNER, 0.0)
+    t_max_trail = solve_t(R_OUTER, t_max)
     
+    d_list_lead = [
+        "a*exp(t)",                       # d1: radius r
+        "b*t + c*t^2",                    # d2: theta
+        "b + 2*c*t",                      # d3: cot(beta)
+        "1 / sqrt(1 + d3^2)",             # d4: sin(beta)
+        f"2*pi*d1 - {blockage}/d4",       # d5: effective circumference (legacy)
+        "d3 * d4",                        # d6: cos(beta) = cot(beta)*sin(beta)
+        "-(d4*sin(d2) + d6*cos(d2))",     # d7: NX
+        "d4*cos(d2) - d6*sin(d2)",        # d8: NY
+        "d1",                             # d9: actual radius R
+        "b + 2*c*log(d9/a)",              # d10: cot(beta) at actual radius R
+        "1 / sqrt(1 + d10^2)",            # d11: sin(beta) at actual radius R
+        f"2*pi*d9 - {blockage}/d11",      # d12: effective circumference at actual radius R
+    ]
+    
+    d_list_trail = [
+        "a*exp(t)",                       # d1: radius r
+        "b*t + c*t^2",                    # d2: theta
+        "b + 2*c*t",                      # d3: cot(beta)
+        "1 / sqrt(1 + d3^2)",             # d4: sin(beta)
+        f"2*pi*d1 - {blockage}/d4",       # d5: effective circumference (legacy)
+        "d3 * d4",                        # d6: cos(beta) = cot(beta)*sin(beta)
+        "-(d4*sin(d2) + d6*cos(d2))",     # d7: NX
+        "d4*cos(d2) - d6*sin(d2)",        # d8: NY
+        f"sqrt(d1^2 + {THICKNESS}^2 - 2*d1*{THICKNESS}*d6)",  # d9: actual radius R for offset curve
+        "b + 2*c*log(d9/a)",              # d10: cot(beta) at actual radius R
+        "1 / sqrt(1 + d10^2)",            # d11: sin(beta) at actual radius R
+        f"2*pi*d9 - {blockage}/d11",      # d12: effective circumference at actual radius R
+    ]
+
     base_formula = {
         "a": str(a_val),
         "b": str(b_val),
-        "c": str(c_val),
-        "d": [
-            "a*exp(t)",
-            "b*t + c*t^2",
-            "b + 2*c*t",
-            "1 / sqrt(1 + d3^2)",
-            f"2*pi*d1 - {blockage}/d4"
-        ],
+        "c": str(c_val)
+    }
+    
+    blade_spiral_leading = dict(base_formula, **{
+        "d": d_list_lead,
         "X": "d1*cos(d2)",
         "Y": "d1*sin(d2)",
+        "Z": "0",
         "t_min": "0.0",
         "t_max": str(t_max),
         "interval": "0.01"
-    }
+    })
     
-    blade_spiral = base_formula.copy()
-    blade_spiral["Z"] = "0"
+    hill_spiral_leading = dict(base_formula, **{
+        "d": d_list_lead,
+        "X": "d1*cos(d2)",
+        "Y": "d1*sin(d2)",
+        "Z": f"{a_total}/d12",
+        "t_min": "0.0",
+        "t_max": str(t_max),
+        "interval": "0.01"
+    })
     
-    hill_spiral = base_formula.copy()
-    hill_spiral["Z"] = f"{a_total}/d5"
+    blade_spiral_trailing = dict(base_formula, **{
+        "d": d_list_trail,
+        "X": f"d1*cos(d2) + {THICKNESS} * d7",
+        "Y": f"d1*sin(d2) + {THICKNESS} * d8",
+        "Z": "0",
+        "t_min": str(t_min_trail),
+        "t_max": str(t_max_trail),
+        "interval": "0.01"
+    })
+    
+    hill_spiral_trailing = dict(base_formula, **{
+        "d": d_list_trail,
+        "X": f"d1*cos(d2) + {THICKNESS} * d7",
+        "Y": f"d1*sin(d2) + {THICKNESS} * d8",
+        "Z": f"{a_total}/d12",
+        "t_min": str(t_min_trail),
+        "t_max": str(t_max_trail),
+        "interval": "0.01"
+    })
     
     output_data = {
-        "blade_spiral": blade_spiral,
-        "hill_spiral": hill_spiral
+        "blade_spiral_leading": blade_spiral_leading,
+        "hill_spiral_leading": hill_spiral_leading,
+        "blade_spiral_trailing": blade_spiral_trailing,
+        "hill_spiral_trailing": hill_spiral_trailing
     }
     
     output_file = "formula1.json"
     with open(output_file, 'w') as f:
         json.dump(output_data, f, indent=4)
         
-    print(f"Successfully generated modified log-spiral design parameters in '{output_file}'")
+    print(f"Successfully generated 4-profile design parameters in '{output_file}'")
 
 if __name__ == "__main__":
     generate_impeller_design()
