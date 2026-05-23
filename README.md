@@ -2,6 +2,8 @@
 
 _Intent is to use generated curve equations to model the blades and shroud of an impeller with a flat hub in FreeCAD, via JSON import into the Parametric_Curve_FP macro._
 
+![Impeller_FreeCAD.png](./Impeller_FreeCAD.png)
+
 A Python script calculates optimized impeller blade curve equations based on maximum inlet height, inlet and outlet radius, number of blades, and blade thickness. The curve equations are written to a JSON file in a format compatible with the Parametric_Curve_FP macro.
 
 
